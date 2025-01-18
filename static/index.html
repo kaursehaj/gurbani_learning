@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Learn Religious Songs</title>
+    <style>
+      body {
+        font-family: "Comic Sans MS", cursive, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f0f9ff;
+        color: #333;
+      }
+
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background-color: white;
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+      }
+
+      h1 {
+        color: #2563eb;
+        text-align: center;
+        font-size: 2.5em;
+        margin-bottom: 30px;
+      }
+
+      .song-list {
+        display: grid;
+        gap: 15px;
+        margin-bottom: 30px;
+      }
+
+      .song-card {
+        background-color: #e0f2fe;
+        padding: 15px;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+
+      .song-card:hover {
+        transform: scale(1.02);
+      }
+
+      .game-area {
+        text-align: center;
+        display: none;
+      }
+
+      .lyrics-input {
+        width: 100%;
+        padding: 10px;
+        font-size: 1.1em;
+        margin: 10px 0;
+        border: 2px solid #93c5fd;
+        border-radius: 5px;
+      }
+
+      .btn {
+        background-color: #2563eb;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        font-size: 1.1em;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        margin: 5px;
+      }
+
+      .btn:hover {
+        background-color: #1d4ed8;
+      }
+
+      .hint-btn {
+        background-color: #059669;
+      }
+
+      .reveal-btn {
+        background-color: #dc2626;
+      }
+
+      .feedback {
+        margin-top: 15px;
+        font-size: 1.2em;
+      }
+
+      .hint-text {
+        margin: 15px 0;
+        font-size: 1.1em;
+        color: #059669;
+      }
+
+      .reveal-container {
+        margin: 15px 0;
+        font-size: 1.1em;
+      }
+
+      .revealed-letter {
+        color: #2563eb;
+        font-weight: bold;
+      }
+
+      .hidden-letter {
+        color: #ccc;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🎵 Learn Religious Songs 🎵</h1>
+
+      <div id="songList" class="song-list"></div>
+
+      <div id="gameArea" class="game-area">
+        <h2 id="currentSongTitle"></h2>
+        <p id="currentLine"></p>
+        <input
+          type="text"
+          id="lyricsInput"
+          class="lyrics-input"
+          placeholder="Type the next line..."
+        />
+        <div>
+          <button id="checkButton" class="btn">Check</button>
+          <button id="hintButton" class="btn hint-btn">Get Hint</button>
+          <button id="revealButton" class="btn reveal-btn">
+            Reveal Answer
+          </button>
+        </div>
+        <div id="hintText" class="hint-text"></div>
+        <div id="revealContainer" class="reveal-container"></div>
+        <div id="feedback" class="feedback"></div>
+        <button id="backButton" class="btn" style="margin-top: 20px">
+          Back to Songs
+        </button>
+      </div>
+    </div>
+
+    <script>
+      let currentSong = null;
+      let currentLineIndex = 0;
+      let revealIndex = 0;
+      let revealInterval = null;
+
+      async function loadSongs() {
+        try {
+          const response = await fetch("/api/songs");
+          const songs = await response.json();
+
+          const songList = document.getElementById("songList");
+          songList.innerHTML = songs
+            .map(
+              (song) => `
+                    <div class="song-card" onclick="startGame(${song.id})">
+                        <h3>${song.title}</h3>
+                        <p>Difficulty: ${song.difficulty}</p>
+                    </div>
+                `
+            )
+            .join("");
+        } catch (error) {
+          console.error("Error loading songs:", error);
+        }
+      }
+
+      async function startGame(songId) {
+        try {
+          const response = await fetch(`/api/songs/${songId}`);
+          currentSong = await response.json();
+          currentLineIndex = 0;
+
+          document.getElementById("songList").style.display = "none";
+          document.getElementById("gameArea").style.display = "block";
+          document.getElementById("currentSongTitle").textContent =
+            currentSong.title;
+          document.getElementById("currentLine").textContent =
+            currentSong.lyrics[currentLineIndex];
+          document.getElementById("lyricsInput").value = "";
+          document.getElementById("feedback").textContent = "";
+          document.getElementById("hintText").textContent = "";
+          document.getElementById("revealContainer").textContent = "";
+        } catch (error) {
+          console.error("Error starting game:", error);
+        }
+      }
+
+      async function getHint() {
+        try {
+          const response = await fetch(
+            `/api/hint/${currentSong.id}/${currentLineIndex}`
+          );
+          const hintData = await response.json();
+
+          const hintText = document.getElementById("hintText");
+          hintText.innerHTML = `
+                    Hint:<br>
+                    First letter: ${hintData.firstLetter}<br>
+                    Number of words: ${hintData.wordCount}<br>
+                    Pattern: ${hintData.hint}
+                `;
+        } catch (error) {
+          console.error("Error getting hint:", error);
+        }
+      }
+
+      function revealAnswer() {
+        const correctLyrics = currentSong.lyrics[currentLineIndex];
+        clearInterval(revealInterval);
+        revealIndex = 0;
+
+        const revealContainer = document.getElementById("revealContainer");
+        revealContainer.innerHTML = correctLyrics
+          .split("")
+          .map((letter) => `<span class="hidden-letter">${letter}</span>`)
+          .join("");
+
+        revealInterval = setInterval(() => {
+          if (revealIndex >= correctLyrics.length) {
+            clearInterval(revealInterval);
+            return;
+          }
+
+          const spans = revealContainer.getElementsByTagName("span");
+          spans[revealIndex].className = "revealed-letter";
+          revealIndex++;
+        }, 200);
+      }
+
+      async function checkLyrics() {
+        const userInput = document.getElementById("lyricsInput").value;
+
+        try {
+          const response = await fetch("/api/check-lyrics", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              songId: currentSong.id,
+              lyrics: userInput,
+              lineIndex: currentLineIndex,
+            }),
+          });
+
+          const result = await response.json();
+          const feedback = document.getElementById("feedback");
+
+          if (result.correct) {
+            feedback.textContent = "✨ Correct! ✨";
+            feedback.style.color = "#059669";
+            currentLineIndex++;
+
+            if (currentLineIndex < currentSong.lyrics.length) {
+              setTimeout(() => {
+                document.getElementById("currentLine").textContent =
+                  currentSong.lyrics[currentLineIndex];
+                document.getElementById("lyricsInput").value = "";
+                document.getElementById("feedback").textContent = "";
+                document.getElementById("hintText").textContent = "";
+                document.getElementById("revealContainer").textContent = "";
+              }, 1000);
+            } else {
+              feedback.textContent =
+                "🎉 Congratulations! You've learned the whole song! 🎉";
+            }
+          } else {
+            feedback.textContent = "❌ Try again! ❌";
+            feedback.style.color = "#dc2626";
+          }
+        } catch (error) {
+          console.error("Error checking lyrics:", error);
+        }
+      }
+
+      function backToSongs() {
+        document.getElementById("gameArea").style.display = "none";
+        document.getElementById("songList").style.display = "grid";
+        currentSong = null;
+        currentLineIndex = 0;
+        clearInterval(revealInterval);
+      }
+
+      // Event listeners
+      document
+        .getElementById("checkButton")
+        .addEventListener("click", checkLyrics);
+      document.getElementById("hintButton").addEventListener("click", getHint);
+      document
+        .getElementById("revealButton")
+        .addEventListener("click", revealAnswer);
+      document
+        .getElementById("backButton")
+        .addEventListener("click", backToSongs);
+      document
+        .getElementById("lyricsInput")
+        .addEventListener("keypress", (e) => {
+          if (e.key === "Enter") checkLyrics();
+        });
+
+      // Load songs when the page loads
+      loadSongs();
+    </script>
+  </body>
+</html>
